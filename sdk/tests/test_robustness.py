@@ -117,6 +117,53 @@ class TestDatabaseInitialize:
             await db2.close()
 
 
+class TestDatabaseInsert:
+    @pytest.mark.asyncio
+    async def test_insert_returns_caller_supplied_id(self, tmp_path, monkeypatch):
+        """When the caller passes 'id' in data, insert() returns that exact value."""
+        db_file = tmp_path / "insert_text.db"
+        monkeypatch.setenv("SQLITE_PATH", str(db_file))
+        db = Database()
+        await db.initialize()
+        try:
+            returned = await db.insert(
+                "audit_entries",
+                {
+                    "id": "my-uuid-123",
+                    "trace_id": "t1",
+                    "timestamp": 1000,
+                    "component": "test",
+                    "action": "insert_test",
+                },
+            )
+            assert returned == "my-uuid-123"
+        finally:
+            await db.close()
+
+    @pytest.mark.asyncio
+    async def test_insert_returns_lastrowid_when_no_id_supplied(self, tmp_path, monkeypatch):
+        """When the caller omits 'id', insert() returns the cursor's lastrowid — not ''."""
+        db_file = tmp_path / "insert_auto.db"
+        monkeypatch.setenv("SQLITE_PATH", str(db_file))
+        db = Database()
+        await db.initialize()
+        try:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS autoincrement_test "
+                "(rowid INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)"
+            )
+            await db.commit()
+
+            returned = await db.insert("autoincrement_test", {"value": "first"})
+            assert returned != "", "insert() silently returned '' for an autoincrement row"
+            assert returned == "1", f"expected lastrowid '1', got {returned!r}"
+
+            returned2 = await db.insert("autoincrement_test", {"value": "second"})
+            assert returned2 == "2", f"expected lastrowid '2', got {returned2!r}"
+        finally:
+            await db.close()
+
+
 class TestEmbeddingServiceSession:
     @pytest.mark.asyncio
     async def test_reuses_single_session(self):

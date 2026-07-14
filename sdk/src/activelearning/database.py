@@ -202,9 +202,11 @@ class Database:
         columns = ", ".join(data.keys())
         placeholders = ", ".join("?" for _ in data)
         sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
-        await self.execute(sql, tuple(data.values()))
+        cursor = await self.execute(sql, tuple(data.values()))
         await self.commit()
-        return cast(str, data.get("id", ""))
+        if "id" in data:
+            return cast(str, data["id"])
+        return str(cursor.lastrowid) if cursor.lastrowid is not None else ""
 
     async def update(
         self,
